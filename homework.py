@@ -1,10 +1,7 @@
 import requests
 import os
 from dotenv import load_dotenv
-from pprint import pprint
-from datetime import datetime, timedelta
 import time
-#from telegram import Bot, ReplyKeyboardMarkup
 import telegram
 from telegram.ext import Updater, Filters, MessageHandler, CommandHandler
 import logging
@@ -12,6 +9,12 @@ from random import randrange
 
 load_dotenv()
 
+logging.basicConfig(
+    filename='practicum_hw_status_bot.log',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    filemode='w'
+)
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -22,7 +25,7 @@ ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 UPADTER = Updater(token=TELEGRAM_TOKEN)
-bot = telegram.Bot(token=TELEGRAM_TOKEN)
+# bot = telegram.Bot(token=TELEGRAM_TOKEN)
 
 HOMEWORK_STATUSES = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
@@ -30,71 +33,119 @@ HOMEWORK_STATUSES = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
+
 def wake_up(update, context):
+    """Отправка сообщения при подключении бота."""
     chat = update.effective_chat
     name = update.message.chat.first_name
-    username = update.message.chat.username 
-    context.bot.send_message(chat_id=chat.id, 
-                             text=f'Minor demon helper активирован >:-Е! {name}.{username} теперь ты подписан на демонические обновления!',
+    username = update.message.chat.username
+    context.bot.send_message(chat_id=chat.id,
+                             text=f'Minor demon helper активирован >:-Е! '
+                             f'{name}.{username} теперь ты подписан '
+                             f'на демонические обновления!'
                              )
+    logging.info(f'Пользователь {name}.{username} активировал бота')
+
 
 def say_no(update, context):
+    """Отправка рандомного ответа в чат."""
     chat = update.effective_chat
     random_answer = randrange(6)
     answers = {
-        '0':'Не прерывай чтение заклинания!',
-        '1':'Всё так же ни чего нового...',
-        '2':'Запмни: терпение и дисциплина',
-        '3':'Я знал что ты это спросишь',
-        '4':'Мы тут не для этого собрались',
-        '5':'Чем больше вопросов тем меньше ответов',
+        '0': 'Не прерывай чтение заклинания!',
+        '1': 'Всё так же ни чего нового...',
+        '2': 'Запмни: терпение и дисциплина',
+        '3': 'Я знал что ты это спросишь',
+        '4': 'Мы тут не для этого собрались',
+        '5': 'Чем больше вопросов тем меньше ответов',
     }
-    context.bot.send_message(chat_id=chat.id,text=answers.get(str(random_answer)))
+    text = answers[str(random_answer)]
+    context.bot.send_message(
+        chat_id=chat.id,
+        text=text
+    )
+    message = update.message.text
+    name = update.message.chat.first_name
+    username = update.message.chat.username
+    logging.info(f'Пользователь {name}.{username} написал "{message}"')
+    logging.info(f'Пользователь {name}.{username} получил ответ "{text}"')
+
 
 def check(update, context):
+    """Отправка сообщения о статусе последней работы."""
     chat = update.effective_chat
-    # response = get_api_answer(1549962000)
-    # homework = response.json().get("homeworks")
-    # homework_status = homework[0].get("status")
-    # homework_name = homework[0].get("homework_name")
-    # context.bot.send_message(chat_id=chat.id,text=f'{Текущий статус проверки работы "{homework_name}": {homework_status}}')    
-    thirty_days = 2592000
-    current_timestamp = int(time.time()) - thirty_days    
+    thirty_days: int = 2592000
+    current_timestamp = int(time.time()) - thirty_days
     response = get_api_answer(current_timestamp)
     homework = check_response(response)
-    message = parse_status(homework)  
-    context.bot.send_message(chat_id=chat.id,text=f'{message}')
+    homework_status = homework[0]["status"]
+    homework_name = homework[0]["homework_name"]
+    message = (
+        f'Текущий статус проверки работы "{homework_name}": {homework_status}'
+    )
+    context.bot.send_message(chat_id=chat.id, text=message)
+    name = update.message.chat.first_name
+    username = update.message.chat.username
+    logging.info(f'Пользователь {name}.{username} запросил статус домашки')
+    logging.info(f'Пользователь {name}.{username} получил ответ "{message}"')
+
 
 def send_message(bot, message):
-    bot.send_message(chat_id=TELEGRAM_CHAT_ID,text=message)
+    """Отправка сообщения в чат."""
+    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+    logging.info(
+        f'Пользователю {TELEGRAM_CHAT_ID} отправлено сообщение "{message}"'
+    )
 
 
 def get_api_answer(current_timestamp):
+    """Функия получает ответ от Яндекс API."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
-    response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-    return response
+    try:
+        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    except requests.RequestException as error:
+        raise ConnectionError(f'Ошибка подключения к Яндекс API {error}')
+    status_code = response.status_code
+    if status_code != 200:
+        raise AssertionError('Сервер не отдал код 200')
+    return response.json()
 
 
 def check_response(response):
-    homeworks = response.json().get("homeworks")
-    homework = homeworks[0]
+    """Функия проверяет ответ от Яндекс API."""
+    homework = response["homeworks"]
+    if type(response) is not dict:
+        raise AssertionError('response не является словарем')
+    if type(homework) is not list:
+        raise AssertionError('Задания поступили не списком')
     return homework
-    ...
 
 
 def parse_status(homework):
-    homework_name = homework.get("homework_name")
-    homework_status = homework.get("status")
-    verdict = HOMEWORK_STATUSES.get(homework_status)
+    """Функия получает статус из ответа от Яндекс API."""
+    homework_name = homework["homework_name"]
+    homework_status = homework["status"]
+
+    if "homework_name" not in homework:
+        raise AssertionError('"homework_name" отсутствует в "homework"')
+    if "status" not in homework:
+        raise AssertionError('"status" отсутствует в "homework"')
+    if homework_status not in HOMEWORK_STATUSES:
+        raise AssertionError('Неизвестный науке статус работы')
+
+    verdict = HOMEWORK_STATUSES[homework_status]
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens():
+    """Функия проверяет наличие токенов."""
     flag = True
-    if PRACTICUM_TOKEN is None or TELEGRAM_TOKEN is None or TELEGRAM_CHAT_ID is None:
-        flag = False
+    tokens = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
+    for token in tokens:
+        if token is None:
+            flag = False
     return flag
 
 
@@ -104,32 +155,37 @@ def main():
     UPADTER.dispatcher.add_handler(CommandHandler('check', check))
     UPADTER.dispatcher.add_handler(MessageHandler(Filters.text, say_no))
     UPADTER.start_polling()
-    # UPADTER.idle() 
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    twelve_hours = 43200
-    thirty_days = 2592000
-    current_timestamp = int(time.time()) - thirty_days
+    current_timestamp = int(time.time())
+
+    # thirty_days: int = 2592000
+    # current_timestamp = int(time.time()) - thirty_days
 
     check_tokens()
+
+    i = 1
+    a = 'tik'
+    b = 'tak'
+
     while True:
         try:
             response = get_api_answer(current_timestamp)
             homework = check_response(response)
-            message = parse_status(homework)
-            send_message(bot, message)
-
-            #current_timestamp = ...
-
+            if homework:
+                message = parse_status(homework[0])
+                send_message(bot, message)
+            current_timestamp = response['current_date']
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
+            logging.exception(message)
             send_message(bot, message)
-            # time.sleep(RETRY_TIME)
-        # else:
-        #     ...
+
+        print(a, i)
+        i += 1
+        (a, b) = (b, a)
 
         time.sleep(RETRY_TIME)
-        
 
 
 if __name__ == '__main__':
