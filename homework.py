@@ -24,8 +24,6 @@ RETRY_TIME = 30
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-UPADTER = Updater(token=TELEGRAM_TOKEN)
-
 HOMEWORK_STATUSES = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
@@ -150,6 +148,7 @@ def check_tokens():
 
 def main():
     """Основная логика работы бота."""
+    UPADTER = Updater(token=TELEGRAM_TOKEN)
     UPADTER.dispatcher.add_handler(CommandHandler('start', wake_up))
     UPADTER.dispatcher.add_handler(CommandHandler('check', check))
     UPADTER.dispatcher.add_handler(MessageHandler(Filters.text, say_no))
