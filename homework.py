@@ -20,12 +20,11 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-RETRY_TIME = 60
+RETRY_TIME = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 UPADTER = Updater(token=TELEGRAM_TOKEN)
-# bot = telegram.Bot(token=TELEGRAM_TOKEN)
 
 HOMEWORK_STATUSES = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
@@ -179,7 +178,10 @@ def main():
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logging.exception(message)
-            send_message(bot, message)
+            try:
+                send_message(bot, message)
+            except Exception as error:
+                logging.exception(f'{error} Ошибка отправки в телеграм')
 
         print(a, i)
         i += 1
