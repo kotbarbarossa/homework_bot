@@ -41,7 +41,8 @@ def wake_up(update, context):
         )
     except Exception as error:
         logging.exception(f'{error} Ошибка отправки ответа в телеграм')
-    logging.info(f'Пользователь {name}.{username} активировал бота')
+    else:
+        logging.info(f'Пользователь {name}.{username} активировал бота')
 
 
 def say_no(update, context):
@@ -66,11 +67,12 @@ def say_no(update, context):
         )
     except Exception as error:
         logging.exception(f'{error} Ошибка отправки ответа в телеграм')
-    message = update.message.text
-    name = update.message.chat.first_name
-    username = update.message.chat.username
-    logging.info(f'Пользователь {name}.{username} написал "{message}"')
-    logging.info(f'Пользователь {name}.{username} получил ответ "{text}"')
+    else:
+        message = update.message.text
+        name = update.message.chat.first_name
+        username = update.message.chat.username
+        logging.info(f'Пользователь {name}.{username} написал "{message}"')
+        logging.info(f'Пользователь {name}.{username} получил ответ "{text}"')
 
 
 def check(update, context):
@@ -114,9 +116,10 @@ def send_message(bot, message):
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
     except Exception as error:
         raise AssertionError(f'{error} Ошибка отправки в телеграм')
-    logging.info(
-        f'Пользователю {TELEGRAM_CHAT_ID} отправлено сообщение "{message}"'
-    )
+    else:
+        logging.info(
+            f'Пользователю {TELEGRAM_CHAT_ID} отправлено сообщение "{message}"'
+        )
 
 
 def get_api_answer(current_timestamp):
@@ -197,7 +200,6 @@ def main():
     UPADTER.dispatcher.add_handler(MessageHandler(Filters.text, say_no))
     UPADTER.start_polling()
 
-    # current_timestamp = int(time.time())
     current_timestamp = 1
 
     prev_report = {}
@@ -213,9 +215,11 @@ def main():
             if homework and current_report != prev_report:
                 bot = telegram.Bot(token=TELEGRAM_TOKEN)
                 message = parse_status(homework[0])
+                logging.info(f'Получен новый статус работы {current_report}')
                 send_message(bot, message)
                 prev_report = current_report.copy()
-            # current_timestamp = response['current_date']
+            else:
+                logging.debug('Наличие нового статуса не обнаружено')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logging.exception(message)
@@ -225,6 +229,13 @@ def main():
                 logging.exception(f'{error} Ошибка отправки в телеграм')
 
         time.sleep(RETRY_TIME)
+    else:
+        logging.exception(
+            'Функция проверки токенов вернула False. '
+            'Выполнение программы без токенов невозможно. '
+            'Бот не смог начать работу.'
+        )
+        raise AssertionError('Ошибка проверки токенов')
 
 
 if __name__ == '__main__':
@@ -232,7 +243,7 @@ if __name__ == '__main__':
         filename='practicum_hw_status_bot.log',
         format='%(asctime)s - %(name)s - %(levelname)s - LINE: %(lineno)d'
         ' - FUNCTION: %(funcName)s - MESSAGE: %(message)s',
-        level=logging.INFO,
+        level=logging.DEBUG,
         filemode='w'
     )
     main()
